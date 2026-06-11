@@ -1,0 +1,24 @@
+name: build
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      # Sanity-check the n8n workflow JSON files stay valid.
+      - name: Validate n8n workflow JSON
+        run: |
+          for f in n8n/*.json; do
+            node -e "JSON.parse(require('fs').readFileSync('$f','utf8')); console.log('ok: $f')"
+          done

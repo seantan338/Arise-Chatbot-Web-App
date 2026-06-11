@@ -184,8 +184,17 @@ n8n/
   Arise_Code_Node_Transform_v3_source_url.js  # the transform (also embedded in the ingestion wf)
 scripts/
   test-webhook.mjs        # `npm run test:webhook` end-to-end check
+  gen-icons.mjs           # `npm run gen:icons` regenerates the PWA icons
+docs/
+  agent-quickstart.md     # one-pager to forward to agents
+public/
+  manifest.webmanifest · icon-*.png · apple-touch-icon.png   # installable PWA
 Dockerfile · nginx.conf · netlify.toml · vercel.json   # deploy presets
+.github/workflows/build.yml                            # CI: build + validate n8n JSON
 ```
+
+The app is an installable **PWA** — agents can "Add to Home Screen" on mobile
+for an app-like shortcut.
 
 ---
 

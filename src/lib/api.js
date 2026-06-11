@@ -22,16 +22,25 @@ export async function sendMessage(message, sessionId, signal) {
     )
   }
 
+  // Guard against a request that hangs forever (e.g. workflow stalled). The AI
+  // agent + tool call can legitimately take a while, so allow up to 90s.
+  const timeout = AbortSignal.timeout(90_000)
+  const composite = signal ? anySignal([signal, timeout]) : timeout
+
   let res
   try {
     res = await fetch(config.webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message, sessionId }),
-      signal,
+      signal: composite,
     })
   } catch (err) {
-    if (err?.name === 'AbortError') throw err
+    // User navigated / started a new chat — propagate so the caller stays quiet.
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    if (timeout.aborted) {
+      throw new Error('The assistant took too long to respond. Please try again.')
+    }
     throw new Error(
       'Could not reach the assistant. Check your connection or that the n8n workflow is active.',
     )
@@ -45,6 +54,21 @@ export async function sendMessage(message, sessionId, signal) {
 
   const raw = await res.text()
   return { text: extractText(raw) }
+}
+
+// Combine multiple AbortSignals into one (uses native AbortSignal.any when
+// available, with a small fallback for older mobile browsers).
+function anySignal(signals) {
+  if (typeof AbortSignal.any === 'function') return AbortSignal.any(signals)
+  const controller = new AbortController()
+  for (const s of signals) {
+    if (s.aborted) {
+      controller.abort(s.reason)
+      break
+    }
+    s.addEventListener('abort', () => controller.abort(s.reason), { once: true })
+  }
+  return controller.signal
 }
 
 function extractText(raw) {
