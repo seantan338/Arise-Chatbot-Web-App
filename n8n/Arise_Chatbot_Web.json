@@ -1,0 +1,180 @@
+{
+  "name": "Arise Chatbot — Web",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "arise-web-chat",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "web-webhook",
+      "name": "Web Chat Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 320],
+      "webhookId": "arise-web-chat"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f-msg",
+              "name": "message",
+              "value": "={{ $json.body.message }}",
+              "type": "string"
+            },
+            {
+              "id": "f-sess",
+              "name": "sessionId",
+              "value": "={{ $json.body.sessionId || $json.body.chatId || 'web-anon' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "web-extract",
+      "name": "Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [220, 320]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Edit Fields').item.json.message }}",
+        "options": {
+          "systemMessage": "You are Arise Real Estate's internal AI assistant for property agents. You answer questions about the projects Arise represents, using a knowledge base tool.\n\nYou have a tool called \"search_project_knowledge\" (Pinecone Vector Store) containing detailed records for Arise's projects (e.g. KSL Riverhaus, Avenia, Macrolink Medini, Kews Green @ The Kews, Isola Coast Phase 2 @ Senibong Cove, and others).\n\n== CRITICAL RULES ==\n1. For ANY question about ANY property project, you MUST call search_project_knowledge first. Pass the user's words (including the project name) as the query.\n2. Answer using ONLY information returned by the tool. Never invent prices, packages, figures, or facilities.\n3. Never say \"I don't have information\" before calling the tool first.\n4. Always reply in the same language as the user (English, Bahasa Malaysia, or Mandarin).\n\n== CITING SOURCES (very important) ==\n- Every record returned by the tool contains a \"Source:\" line with a URL, and may contain asset links such as Price List, Floor Plan, Sales Kit, or Photo & Video.\n- After your answer, you MUST add a short \"Sources\" section listing these as clickable Markdown links, one per line, in the form: [Label](URL).\n  - Always include the project record link, e.g. [KSL Riverhaus — full details](https://www.notion.so/...).\n  - Also include any asset links present in the record (e.g. [Price List](URL), [Floor Plan](URL)).\n- Only use URLs that actually appear in the tool result. Never fabricate or guess a URL. If the tool result contains no URL at all, omit the Sources section.\n- If you used more than one project record, group the sources under each project name.\n\n== FORMATTING ==\n- Reply in Markdown. Use **bold** for key figures, bullet lists for multiple items, and keep answers focused and scannable.\n- This is rendered in a web chat, so Markdown links are clickable — always prefer Markdown links over bare URLs.\n- Use Malaysian conventions (RM, sq ft, freehold/leasehold).",
+          "maxIterations": 5
+        }
+      },
+      "id": "web-agent",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [460, 320]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash-lite",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "web-gemini",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [380, 560],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "cun5GezmEtfIyp5o",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Edit Fields').item.json.sessionId }}",
+        "contextWindowLength": 10
+      },
+      "id": "web-memory",
+      "name": "Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [560, 560]
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolName": "search_project_knowledge",
+        "toolDescription": "Search the Arise Real Estate property knowledge base for project details: developer, price, unit types, built-up, facilities, sales package, bank financing, and the source link for each project. Input should be the project name or the agent's question.",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "arise-property-kb",
+          "mode": "list",
+          "cachedResultName": "arise-property-kb"
+        },
+        "topK": 5,
+        "options": {
+          "pineconeNamespace": "projects"
+        }
+      },
+      "id": "web-pinecone",
+      "name": "Pinecone Vector Store",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [740, 560],
+      "credentials": {
+        "pineconeApi": {
+          "id": "qcQqlX7jUz5V9oJ5",
+          "name": "TCY Arise"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "web-embeddings",
+      "name": "Embeddings Google Gemini",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
+      "typeVersion": 1,
+      "position": [760, 760],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "IJcf0d9cddWvlyaE",
+          "name": "Arise Real Estate"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"output\": $json.output } }}",
+        "options": {}
+      },
+      "id": "web-respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [880, 320]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Web Chat Webhook": {
+      "main": [[{ "node": "Edit Fields", "type": "main", "index": 0 }]]
+    },
+    "Edit Fields": {
+      "main": [[{ "node": "AI Agent", "type": "main", "index": 0 }]]
+    },
+    "AI Agent": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [[{ "node": "AI Agent", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Window Buffer Memory": {
+      "ai_memory": [[{ "node": "AI Agent", "type": "ai_memory", "index": 0 }]]
+    },
+    "Pinecone Vector Store": {
+      "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "Embeddings Google Gemini": {
+      "ai_embedding": [[{ "node": "Pinecone Vector Store", "type": "ai_embedding", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "76f78bdab1817dc4461f0ddb572481cbea7c7ec17d27e2d776a554666ce82387"
+  },
+  "tags": []
+}
