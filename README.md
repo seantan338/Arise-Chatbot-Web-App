@@ -72,19 +72,43 @@ webhook, so all credentials stay inside n8n.
 
 ---
 
-## 1. Set up the n8n workflow
+## 1. Set up the n8n workflows
 
-1. In n8n: **Import from File** → `n8n/Arise_Chatbot_Web.json`.
-2. Open each credential-bearing node (Gemini chat, Embeddings, Pinecone) and
-   confirm the credentials resolved (the file reuses the IDs from your existing
-   Smart Bot; re-select them if your instance differs).
-3. **Activate** the workflow and copy the **Production URL** from the Webhook
-   node, e.g. `https://n8n.yourdomain.com/webhook/arise-web-chat`.
-4. (Recommended) Re-run KB ingestion using the v3 transform so records carry a
-   `Source:` URL — otherwise answers won't have links to cite.
+Two workflows live in `n8n/`. Import both via **Import from File**:
 
-CORS is preset to `*` on the webhook for easy testing. For production, change
-the Webhook node's **Allowed Origins** to your deployed domain.
+| File | Purpose | Credentials |
+| --- | --- | --- |
+| `Arise_Chatbot_Web.json` | The web chat webhook the UI calls | **None to add** — reuses your live Pinecone + Gemini cred IDs |
+| `Arise_KB_Ingestion_Web.json` | Refreshes Pinecone from Notion **with source URLs** | Pinecone + Gemini reused; **only the Notion node needs a token** |
+
+**Chatbot (works immediately):**
+1. Import `Arise_Chatbot_Web.json`, confirm the Gemini/Pinecone nodes show your
+   existing credentials (re-select if your instance differs).
+2. **Activate**, then copy the Webhook node's **Production URL**, e.g.
+   `https://n8n.yourdomain.com/webhook/arise-web-chat`.
+
+CORS is preset to `*` for easy testing. For production, set the Webhook node's
+**Allowed Origins** to your deployed domain.
+
+**Ingestion (one-time, to enable source links):**
+1. Import `Arise_KB_Ingestion_Web.json`.
+2. On the **Read Notion Project Database** node, create/select a Notion
+   credential for the *separate Arise Notion account*: in that workspace make an
+   **internal integration**, copy its token, and **share the projects database**
+   with the integration. (This is the only credential in the whole project that
+   isn't already wired up — because your files only contained a placeholder.)
+3. Run it once with **Manual Trigger** (or let the 2 a.m. schedule run). It
+   embeds a clickable `Source:` URL into every project record. This Code node
+   already contains the v3 transform inline — no copy-paste needed.
+
+## Verify the n8n side
+
+```bash
+npm run test:webhook "Brief me on KSL Riverhaus"
+```
+
+Reads the URL from `.env` (`VITE_N8N_WEBHOOK_URL`), posts a real message, prints
+the reply, and tells you whether it contained a source link.
 
 ## 2. Configure & run the UI
 
@@ -110,7 +134,16 @@ npm run build              # outputs static files to dist/
 
 `dist/` is fully static — deploy it to Zeabur, Netlify, Vercel, Cloudflare
 Pages, or any static host. Set the same `VITE_*` env vars in the host's build
-settings.
+settings. Ready-made configs are included:
+
+| Host | File | Notes |
+| --- | --- | --- |
+| Netlify | `netlify.toml` | Build + SPA redirect preset |
+| Vercel | `vercel.json` | Build + SPA rewrite preset |
+| Zeabur / any container | `Dockerfile` + `nginx.conf` | Pass `VITE_*` as build args/env |
+
+> Remember `VITE_*` vars are **build-time** for static hosts — set them in the
+> host dashboard (or Docker build args), not at runtime.
 
 ---
 
@@ -146,9 +179,35 @@ src/
     WelcomeScreen.jsx     # empty-state suggestions
     Header.jsx · Logo.jsx · TypingIndicator.jsx
 n8n/
-  Arise_Chatbot_Web.json                  # the web webhook workflow
-  Arise_Code_Node_Transform_v3_source_url.js  # ingestion w/ source URLs
+  Arise_Chatbot_Web.json                      # web chat webhook workflow (import + activate)
+  Arise_KB_Ingestion_Web.json                 # Notion → Pinecone refresh w/ source URLs
+  Arise_Code_Node_Transform_v3_source_url.js  # the transform (also embedded in the ingestion wf)
+scripts/
+  test-webhook.mjs        # `npm run test:webhook` end-to-end check
+Dockerfile · nginx.conf · netlify.toml · vercel.json   # deploy presets
 ```
+
+---
+
+## What you need to do (the only manual steps)
+
+Everything else is wired up. You only have to:
+
+1. **Import + activate** `n8n/Arise_Chatbot_Web.json`; copy its Webhook
+   Production URL.
+2. **Connect Notion once** in `n8n/Arise_KB_Ingestion_Web.json` (internal
+   integration token from the *other* Arise Notion account + share the DB), then
+   run it once. _Optional but needed for source links to appear._
+3. **Fill the asset-link columns** (Price List / Floor Plan / Sales Kit / Photo
+   & Video) in the Notion projects DB with public URLs — these become the links
+   agents click. _Ongoing data hygiene, not code._
+4. **Configure + deploy the UI**: `cp .env.example .env`, set
+   `VITE_N8N_WEBHOOK_URL` and `VITE_ACCESS_CODE`, then `npm run build` and
+   deploy `dist/` (or use a deploy preset above).
+5. **Set the passcode** (`VITE_ACCESS_CODE`) and share it with staff. Restrict
+   the Webhook's **Allowed Origins** to your deployed domain.
+
+Verify anytime with `npm run test:webhook "Brief me on KSL Riverhaus"`.
 
 ---
 

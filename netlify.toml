@@ -1,0 +1,12 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# SPA fallback — the app is client-rendered, so route everything to index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Set VITE_N8N_WEBHOOK_URL and VITE_ACCESS_CODE in
+# Netlify → Site settings → Environment variables (build-time).
