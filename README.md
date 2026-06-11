@@ -29,11 +29,28 @@ This project fixes all three:
 | Instruct the agent to **always append a "Sources" section** of Markdown links | system prompt in `n8n/Arise_Chatbot_Web.json` |
 | **Render Markdown links** as real clickable anchors (new tab) | `src/components/Markdown.jsx` |
 
-> **Note — Notion is in a separate Notion account/workspace.** The auto-derived
-> `https://www.notion.so/<pageid>` links only open for staff signed in to that
-> workspace. To make them open for everyone, either "Share to web" the Notion
-> database, or fill in public asset-link columns (brochure / price list / Drive)
-> in Notion — the transform cites those automatically when present.
+### Chosen citation direction (what to teach agents)
+
+The bot ends every answer with a **Sources** section. By design it cites:
+
+1. **Client-shareable asset links first** — Price List, Floor Plan, Brochure,
+   Photos & Video (the things agents actually send to clients).
+2. **The internal project record link last**, labelled "internal record".
+
+**We deliberately do NOT "Share to web" the Notion database.** It holds
+commission rates, agent notes and sales packages — that must not be exposed on
+the open internet. So the Notion page link is an **internal/manager fallback**
+that only opens for staff signed in to the Notion workspace; the *useful* links
+agents click are the asset links.
+
+> **To populate the asset links:** fill the Price List / Layout Floor Plan /
+> Sales Kit / Photo & Video columns in the Notion projects database with public
+> URLs (developer price lists, Google Drive folders, brochures). The v3
+> transform cites them automatically — no code changes needed.
+
+> **Teach agents this one rule:** *"Every answer ends with Sources. Click the
+> Price List / Floor Plan / Brochure links to open and share with clients. The
+> '— internal record' link is for managers only."*
 
 ---
 
