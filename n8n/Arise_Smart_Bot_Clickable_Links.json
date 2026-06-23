@@ -1,0 +1,304 @@
+{
+  "name": "Arise Smart Bot (Clickable Links)",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "tg-trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "arise-clk-trigger",
+      "credentials": {
+        "telegramApi": {
+          "id": "CH4V7DqZfevDTkxY",
+          "name": "TCY Arise"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "chatId",
+              "value": "={{ $json.message.chat.id }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "message",
+              "value": "={{ $json.message.text }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "userId",
+              "value": "={{ $json.message.from.id }}",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "firstName",
+              "value": "={{ $json.message.from.first_name }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "edit-fields",
+      "name": "Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Edit Fields').item.json.message }}",
+        "options": {
+          "systemMessage": "You are Arise Real Estate's internal AI assistant.\n\nYou have a tool called \"Pinecone Vector Store\" containing data about these 5 projects:\n- KSL Riverhaus\n- Avenia\n- Macrolink Medini\n- Kews Green @ The Kews\n- Isola Coast Phase 2 @ Senibong Cove\n\nCRITICAL RULES:\n1. For ANY question about ANY property project, you MUST call the Pinecone Vector Store tool first\n2. Pass the user's exact words as the search query to the tool\n3. Wait for the tool's response, then answer using ONLY information from the tool response\n4. Never say \"I don't have information\" without calling the tool first\n\nAlways respond in the same language as the user.\n\n== ASSET LINKS ==\nIf the knowledge base result contains any asset links (Price List, Floor Plan, Sales Kit, Sales Form, Photo & Video, brochure, or any http/https URL), include them at the END of your answer, each on its OWN line, as a Markdown link:\n[Label](URL)\nUse a short clear label (e.g. Price List, Floor Plan, Photo & Video). Only include URLs that actually appear in the tool result; never invent a URL. Do NOT bury a URL inside a sentence — always use the [Label](URL) form on its own line.",
+          "maxIterations": 5
+        }
+      },
+      "id": "ai-agent",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        512,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash-lite",
+        "options": {}
+      },
+      "id": "gem-model",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        448,
+        524
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "cun5GezmEtfIyp5o",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "mem",
+      "name": "Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1,
+      "position": [
+        576,
+        524
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Search the Arise Real Estate property database for project information. Use this tool for ANY question about KSL Riverhaus, Avenia, Macrolink Medini, Kews Green, or Isola Coast Phase 2. Returns full project details including developer, price, units, facilities, sales package, bank financing, and any document/image links.",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "arise-property-kb",
+          "mode": "list",
+          "cachedResultName": "arise-property-kb"
+        },
+        "topK": 5,
+        "options": {
+          "pineconeNamespace": "projects"
+        }
+      },
+      "id": "pinecone",
+      "name": "Pinecone Vector Store",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        704,
+        524
+      ],
+      "credentials": {
+        "pineconeApi": {
+          "id": "qcQqlX7jUz5V9oJ5",
+          "name": "TCY Arise"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "emb",
+      "name": "Embeddings Google Gemini",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        784,
+        732
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "cun5GezmEtfIyp5o",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let text = ($input.first().json.output) || '';\n// 1) escape HTML special chars\ntext = text.split('&').join('&amp;').split('<').join('&lt;').split('>').join('&gt;');\n// 2) FILE: Label | URL  ->  clickable (in case the model uses that format)\ntext = text.split('\\n').map(function (line) {\n  const t = line.trim();\n  if (t.toUpperCase().indexOf('FILE:') === 0) {\n    const rest = t.slice(5);\n    const bar = rest.indexOf('|');\n    if (bar !== -1) {\n      const label = rest.slice(0, bar).trim() || 'File';\n      const url = rest.slice(bar + 1).trim();\n      if (url) return '\\uD83D\\uDCCE <a href=\"' + url + '\">' + label + '</a>';\n    }\n  }\n  return line;\n}).join('\\n');\n// 3) Markdown [text](url) -> <a>\ntext = text.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href=\"$2\">$1</a>');\n// 4) autolink any bare http(s) URL not already inside a tag\ntext = text.replace(/(^|[\\s(])(https?:\\/\\/[^\\s<]+)/g, '$1<a href=\"$2\">$2</a>');\n// 5) **bold** / __bold__ / *italic*\ntext = text.replace(/\\*\\*([^*]+)\\*\\*/g, '<b>$1</b>');\ntext = text.replace(/__([^_]+)__/g, '<b>$1</b>');\ntext = text.replace(/\\*([^*]+)\\*/g, '<i>$1</i>');\n// tidy blank lines\nwhile (text.indexOf('\\n\\n\\n') !== -1) text = text.split('\\n\\n\\n').join('\\n\\n');\ntext = text.trim();\nreturn [{ json: { output: text } }];"
+      },
+      "id": "format-html",
+      "name": "Format HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Edit Fields').item.json.chatId }}",
+        "text": "={{ $json.output }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "send-text",
+      "name": "Send a text message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1056,
+        300
+      ],
+      "webhookId": "arise-clk-send",
+      "credentials": {
+        "telegramApi": {
+          "id": "CH4V7DqZfevDTkxY",
+          "name": "TCY Arise"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Format HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pinecone Vector Store": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Google Gemini": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format HTML": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "76f78bdab1817dc4461f0ddb572481cbea7c7ec17d27e2d776a554666ce82387"
+  },
+  "tags": []
+}
