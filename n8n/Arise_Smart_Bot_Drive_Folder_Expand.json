@@ -1,0 +1,657 @@
+{
+  "name": "Arise Smart Bot (Drive Folder Expand)",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "tg-trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -400,
+        300
+      ],
+      "webhookId": "arise-fx-trigger",
+      "credentials": {
+        "telegramApi": {
+          "id": "CH4V7DqZfevDTkxY",
+          "name": "TCY Arise"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "chatId",
+              "value": "={{ $json.message.chat.id }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "message",
+              "value": "={{ $json.message.text }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "userId",
+              "value": "={{ $json.message.from.id }}",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "firstName",
+              "value": "={{ $json.message.from.first_name }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "edit-fields",
+      "name": "Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -176,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Edit Fields').item.json.message }}",
+        "options": {
+          "systemMessage": "You are Arise Real Estate's internal AI assistant.\n\nYou have a tool called \"Pinecone Vector Store\" containing data about these 5 projects:\n- KSL Riverhaus\n- Avenia\n- Macrolink Medini\n- Kews Green @ The Kews\n- Isola Coast Phase 2 @ Senibong Cove\n\nCRITICAL RULES:\n1. For ANY question about ANY property project, you MUST call the Pinecone Vector Store tool first\n2. Pass the user's exact words as the search query to the tool\n3. Wait for the tool's response, then answer using ONLY information from the tool response\n4. Never say \"I don't have information\" without calling the tool first\n\nAlways respond in the same language as the user.\n\n== ASSET LINKS ==\nIf the knowledge base result contains any asset links (Price List, Floor Plan, Sales Kit, Sales Form, Photo & Video, brochure, or any http/https URL), include them at the END of your answer, each on its OWN line, as a Markdown link:\n[Label](URL)\nUse a short clear label. Only include URLs that actually appear in the tool result; never invent a URL. Always use the [Label](URL) form on its own line.",
+          "maxIterations": 5
+        }
+      },
+      "id": "ai-agent",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        112,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash-lite",
+        "options": {}
+      },
+      "id": "gem",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        48,
+        560
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "cun5GezmEtfIyp5o",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "mem",
+      "name": "Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1,
+      "position": [
+        176,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Search the Arise Real Estate property database for project information. Use this tool for ANY question about KSL Riverhaus, Avenia, Macrolink Medini, Kews Green, or Isola Coast Phase 2. Returns full project details including developer, price, units, facilities, sales package, bank financing, and any document/image links.",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "arise-property-kb",
+          "mode": "list",
+          "cachedResultName": "arise-property-kb"
+        },
+        "topK": 5,
+        "options": {
+          "pineconeNamespace": "projects"
+        }
+      },
+      "id": "pc",
+      "name": "Pinecone Vector Store",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        304,
+        560
+      ],
+      "credentials": {
+        "pineconeApi": {
+          "id": "qcQqlX7jUz5V9oJ5",
+          "name": "TCY Arise"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "emb",
+      "name": "Embeddings Google Gemini",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        384,
+        768
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "cun5GezmEtfIyp5o",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let text = ($input.first().json.output) || '';\ntext = text.split('&').join('&amp;').split('<').join('&lt;').split('>').join('&gt;');\ntext = text.split('\\n').map(function (line) {\n  const t = line.trim();\n  if (t.toUpperCase().indexOf('FILE:') === 0) {\n    const rest = t.slice(5);\n    const bar = rest.indexOf('|');\n    if (bar !== -1) {\n      const label = rest.slice(0, bar).trim() || 'File';\n      const url = rest.slice(bar + 1).trim();\n      if (url) return '📎 <a href=\"' + url + '\">' + label + '</a>';\n    }\n  }\n  return line;\n}).join('\\n');\ntext = text.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href=\"$2\">$1</a>');\ntext = text.replace(/(^|[\\s(])(https?:\\/\\/[^\\s<]+)/g, '$1<a href=\"$2\">$2</a>');\ntext = text.replace(/\\*\\*([^*]+)\\*\\*/g, '<b>$1</b>');\ntext = text.replace(/__([^_]+)__/g, '<b>$1</b>');\ntext = text.replace(/\\*([^*]+)\\*/g, '<i>$1</i>');\nwhile (text.indexOf('\\n\\n\\n') !== -1) text = text.split('\\n\\n\\n').join('\\n\\n');\ntext = text.trim();\nreturn [{ json: { output: text } }];"
+      },
+      "id": "fmt",
+      "name": "Format HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Edit Fields').item.json.chatId }}",
+        "text": "={{ $json.output }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "sendtext",
+      "name": "Send a text message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        656,
+        140
+      ],
+      "webhookId": "arise-fx-text",
+      "credentials": {
+        "telegramApi": {
+          "id": "CH4V7DqZfevDTkxY",
+          "name": "TCY Arise"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Classify each link: Drive folder / Drive single file / plain http file.\nconst out = ($input.first().json.output) || '';\nconst chatId = $('Edit Fields').first().json.chatId;\nconst knownExt = ['pdf','jpg','jpeg','png','webp','gif','bmp','doc','docx','xls','xlsx','ppt','pptx','zip','csv','txt'];\nconst items = [];\nconst seen = {};\nconst cand = [];\nlet m;\nconst reMd = /\\[([^\\]]+)\\]\\(([^)]+)\\)/g;\nwhile ((m = reMd.exec(out)) !== null) cand.push({ label: m[1].trim(), url: m[2].trim() });\nout.split('\\n').forEach(function (line) {\n  const t = line.trim();\n  if (t.toUpperCase().indexOf('FILE:') === 0) {\n    const rest = t.slice(5); const bar = rest.indexOf('|');\n    if (bar !== -1) cand.push({ label: rest.slice(0, bar).trim(), url: rest.slice(bar + 1).trim() });\n  }\n});\nconst reUrl = /(https?:\\/\\/[^\\s)<>\\]]+)/g;\nwhile ((m = reUrl.exec(out)) !== null) cand.push({ label: '', url: m[1] });\n\nfor (const c of cand) {\n  let url = String(c.url).trim();\n  while (url.length && ')>].,;\"'.indexOf(url[url.length - 1]) !== -1) url = url.slice(0, -1);\n  if (url.toLowerCase().indexOf('http') !== 0 || seen[url]) continue;\n  seen[url] = true;\n  const low = url.toLowerCase();\n  const label = c.label;\n  const fIdx = low.indexOf('/drive/folders/');\n  if (fIdx !== -1) {\n    const folderId = url.slice(fIdx + 15).split('/')[0].split('?')[0].split('#')[0];\n    if (folderId) items.push({ json: { source: 'folder', folderId: folderId, label: label || 'Folder' } });\n    continue;\n  }\n  if (low.indexOf('drive.google.com') !== -1 || low.indexOf('docs.google.com') !== -1) {\n    let id = '';\n    const dpos = url.indexOf('/d/');\n    if (dpos !== -1) id = url.slice(dpos + 3).split('/')[0].split('?')[0];\n    if (!id) { const qp = url.split('id='); if (qp.length > 1) id = qp[1].split('&')[0]; }\n    if (id) items.push({ json: { source: 'drivefile', fileId: id, label: label || 'File' } });\n    continue;\n  }\n  const pathPart = url.split('?')[0].split('#')[0];\n  let seg = pathPart.substring(pathPart.lastIndexOf('/') + 1);\n  try { seg = decodeURIComponent(seg); } catch (e) {}\n  let ext = '';\n  const dot = seg.lastIndexOf('.');\n  if (dot !== -1) { const e = seg.slice(dot + 1).toLowerCase(); if (knownExt.indexOf(e) !== -1) ext = e; }\n  items.push({ json: { source: 'httpfile', downloadUrl: url, label: label || (seg.indexOf('.') !== -1 ? seg : 'File'), ext: ext } });\n}\nreturn items;"
+      },
+      "id": "extract",
+      "name": "Extract Links",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.source }}",
+                    "rightValue": "folder",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "folder"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.source }}",
+                    "rightValue": "drivefile",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "drivefile"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.source }}",
+                    "rightValue": "httpfile",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "httpfile"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "route",
+      "name": "Route by Source",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        656,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "operation": "search",
+        "searchMethod": "query",
+        "queryString": "={{ \"'\" + $json.folderId + \"' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'\" }}",
+        "returnAll": true,
+        "filter": {},
+        "options": {
+          "fields": [
+            "id",
+            "name",
+            "mimeType"
+          ]
+        }
+      },
+      "id": "gdlist",
+      "name": "List Folder Files",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        880,
+        340
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "REPLACE_DRIVE_CRED_ID",
+          "name": "Arise 1250 Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.id }}"
+        },
+        "options": {
+          "binaryPropertyName": "data",
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "application/pdf",
+              "sheetsToFormat": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              "slidesToFormat": "application/pdf"
+            }
+          }
+        }
+      },
+      "id": "gddl1",
+      "name": "Download Folder File",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1104,
+        340
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "REPLACE_DRIVE_CRED_ID",
+          "name": "Arise 1250 Google Drive account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.fileId }}"
+        },
+        "options": {
+          "binaryPropertyName": "data",
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "application/pdf",
+              "sheetsToFormat": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              "slidesToFormat": "application/pdf"
+            }
+          }
+        }
+      },
+      "id": "gddl2",
+      "name": "Download Drive File",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        880,
+        540
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "REPLACE_DRIVE_CRED_ID",
+          "name": "Arise 1250 Google Drive account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.downloadUrl }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "httpdl",
+      "name": "Download Http File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        880,
+        720
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const mimeToExt = {\n  'application/pdf':'pdf','image/jpeg':'jpg','image/png':'png','image/webp':'webp',\n  'image/gif':'gif','image/bmp':'bmp','application/msword':'doc',\n  'application/vnd.openxmlformats-officedocument.wordprocessingml.document':'docx',\n  'application/vnd.ms-excel':'xls',\n  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'xlsx',\n  'application/vnd.ms-powerpoint':'ppt',\n  'application/vnd.openxmlformats-officedocument.presentationml.presentation':'pptx',\n  'application/zip':'zip','text/csv':'csv','text/plain':'txt'\n};\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json || {};\n  const bin = item.binary ? item.binary.data : null;\n  if (!bin) continue;\n  const mime = bin.mimeType ? String(bin.mimeType).split(';')[0].trim().toLowerCase() : '';\n  if (mime === 'text/html' || (bin.fileExtension && String(bin.fileExtension).toLowerCase().indexOf('htm') === 0)) continue;\n  let rawName = j.name || j.label || bin.fileName || 'file';\n  let ext = j.ext || '';\n  if (!ext && String(rawName).indexOf('.') !== -1) { const e = String(rawName).split('.').pop().toLowerCase(); if (e.length <= 5) ext = e; }\n  if (!ext && bin.fileExtension) ext = String(bin.fileExtension).toLowerCase().replace('.', '');\n  if (!ext && mime) ext = mimeToExt[mime] || '';\n  let base = String(rawName).replace(/[\\\\/:*?\"<>|]+/g, ' ').replace(/\\s+/g, ' ').trim() || 'file';\n  if (ext && base.toLowerCase().endsWith('.' + ext)) base = base.slice(0, -(ext.length + 1));\n  const fileName = ext ? base + '.' + ext : base;\n  bin.fileName = fileName;\n  j.fileName = fileName;\n  j.label = base;\n  out.push(item);\n}\nreturn out;"
+      },
+      "id": "fix",
+      "name": "Fix File Name",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendDocument",
+        "chatId": "={{ $('Edit Fields').item.json.chatId }}",
+        "binaryData": true,
+        "additionalFields": {
+          "caption": "={{ $json.label }}",
+          "fileName": "={{ $json.fileName }}"
+        }
+      },
+      "id": "senddoc",
+      "name": "Send Document",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1584,
+        540
+      ],
+      "webhookId": "arise-fx-doc",
+      "credentials": {
+        "telegramApi": {
+          "id": "CH4V7DqZfevDTkxY",
+          "name": "TCY Arise"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Format HTML",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Extract Links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pinecone Vector Store": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Google Gemini": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format HTML": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Links": {
+      "main": [
+        [
+          {
+            "node": "Route by Source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Source": {
+      "main": [
+        [
+          {
+            "node": "List Folder Files",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Download Drive File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Download Http File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Folder Files": {
+      "main": [
+        [
+          {
+            "node": "Download Folder File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Folder File": {
+      "main": [
+        [
+          {
+            "node": "Fix File Name",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Drive File": {
+      "main": [
+        [
+          {
+            "node": "Fix File Name",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Http File": {
+      "main": [
+        [
+          {
+            "node": "Fix File Name",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fix File Name": {
+      "main": [
+        [
+          {
+            "node": "Send Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "76f78bdab1817dc4461f0ddb572481cbea7c7ec17d27e2d776a554666ce82387"
+  },
+  "tags": []
+}
